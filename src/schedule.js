@@ -135,53 +135,92 @@ async function sendNotification({ body, footer, attempt = 0 }) {
   if (!TELEGRAM_BOT_TOKEN) throw Error("❌ Missing telegram bot token.")
   if (!TELEGRAM_CHAT_ID) throw Error("❌ Missing telegram chat id.")
 
+  const chatIds = String(TELEGRAM_CHAT_ID)
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean)
+
+  if (!chatIds.length) throw Error("❌ Missing telegram chat id.")
+
   console.log("🌀 Sending notification...")
 
   const text = [body, footer].join("\n\n")
+  const lastState = loadLastMessage()
+  const isMapState =
+    lastState &&
+    typeof lastState === "object" &&
+    !Array.isArray(lastState) &&
+    lastState.chats &&
+    typeof lastState.chats === "object"
 
-  const lastMessage = loadLastMessage() || {}
-  const isBodyChanged = lastMessage.body !== body
-  const isEdit = Boolean(lastMessage.message_id) && !isBodyChanged
-  const isReply = Boolean(lastMessage.message_id) && isBodyChanged
+  const nextState = {
+    body,
+    chats: isMapState ? { ...lastState.chats } : {},
+  }
+
+  // Если раньше сохранялся формат под один чат — перенесём его на первый ID
+  if (!isMapState && lastState?.message_id && chatIds[0]) {
+    nextState.chats[chatIds[0]] = {
+      message_id: lastState.message_id,
+      body: lastState.body,
+    }
+  }
 
   try {
-    const response = await fetch(
-      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/${
-        isEdit ? "editMessageText" : "sendMessage"
-      }`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: TELEGRAM_CHAT_ID,
-          text,
-          parse_mode: "HTML",
-          disable_notification: checkIsNight(),
-          message_id: isEdit ? lastMessage.message_id : undefined,
-          reply_parameters: isReply
-            ? {
-                message_id: lastMessage.message_id,
-                allow_sending_without_reply: true,
-              }
-            : undefined,
-        }),
+    let anySentOrUpdated = false
+
+    for (const chatId of chatIds) {
+      const prevChat = nextState.chats[chatId] || {}
+      const isBodyChanged = prevChat.body !== body
+      const isEdit = Boolean(prevChat.message_id) && !isBodyChanged
+      const isReply = Boolean(prevChat.message_id) && isBodyChanged
+
+      const response = await fetch(
+        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/${
+          isEdit ? "editMessageText" : "sendMessage"
+        }`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text,
+            parse_mode: "HTML",
+            disable_notification: checkIsNight(),
+            message_id: isEdit ? prevChat.message_id : undefined,
+            reply_parameters: isReply
+              ? {
+                  message_id: prevChat.message_id,
+                  allow_sending_without_reply: true,
+                }
+              : undefined,
+          }),
+        }
+      )
+
+      const data = await response.json()
+
+      if (data.description?.includes("not modified")) {
+        console.log(`🟡 Notification not changed (${chatId}).`)
+        continue
       }
-    )
 
-    const data = await response.json()
+      if (!data.ok) {
+        delete nextState.chats[chatId]
+        throw Error(`[${chatId}] ${data.description}`)
+      }
 
-    if (data.description?.includes("not modified")) {
-      console.log("🟡 Notification not changed.")
-      return
+      nextState.chats[chatId] = {
+        message_id: data.result.message_id,
+        body,
+      }
+      anySentOrUpdated = true
+      console.log(`🟢 Notification sent (${chatId}).`)
     }
-    if (!data.ok) {
-      deleteLastMessage()
-      throw Error(data.description)
+
+    if (anySentOrUpdated) {
+      saveLastMessage(nextState)
     }
-
-    saveLastMessage({ ...data.result, body })
-
-    console.log("🟢 Notification sent.")
   } catch (error) {
     console.error(`❌ Sending notification failed: ${error.message}.`)
 
