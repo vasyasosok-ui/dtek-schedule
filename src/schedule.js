@@ -101,21 +101,67 @@ function generateSchedule({ data }) {
   }
 }
 
+function parseTimeToMinutes(timeStr) {
+  const [hh, mm] = String(timeStr).split(":").map(Number)
+  return hh * 60 + mm
+}
+
+function getPeriodMinutes(begin, end) {
+  const start = parseTimeToMinutes(begin)
+  let finish = parseTimeToMinutes(end)
+  if (finish <= start) {
+    finish += 24 * 60
+  }
+  return Math.max(0, finish - start)
+}
+
+function formatHoursShort(minutes) {
+  const hours = minutes / 60
+  const formatted = Number.isInteger(hours)
+    ? String(hours)
+    : String(Number(hours.toFixed(1)))
+  return `${formatted} год`
+}
+
+function formatTotalDuration(totalMinutes) {
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  if (minutes === 0) return `${hours} год`
+  if (hours === 0) return `${minutes} хв`
+  return `${hours} год ${minutes} хв`
+}
+
 function generateScheduleText({ title, schedule }) {
   if (!schedule) return null
 
-  const isShutdownsExists = schedule.some(({ power }) => !power)
+  const offPeriods = schedule.filter(({ power }) => !power)
+  const isShutdownsExists = offPeriods.length > 0
+
   isShutdownsExists
-    ? console.log(`🪫 Power shutdowns detected: ${title}.`)
-    : console.log(`🔋 No power shutdowns: ${title}.`)
+    ? console.log(`Power shutdowns detected: ${title}.`)
+    : console.log(`No power shutdowns: ${title}.`)
 
-  const periods = isShutdownsExists
-    ? schedule
-        .filter(({ power }) => !power)
-        .map(({ begin, end }) => `🪫 <code>${begin} — ${end}</code>`)
-    : schedule.map(({ begin, end }) => `🔋 <code>${begin} — ${end}</code>`)
+  if (!isShutdownsExists) {
+    const periods = schedule.map(
+      ({ begin, end }) => `<code>${begin} — ${end}</code>`
+    )
+    return [`<b>${title}:</b>`, ...periods].join("\n")
+  }
 
-  return [`<b>${title}:</b>`, ...periods].join("\n")
+  let totalOffMinutes = 0
+
+  const periods = offPeriods.map(({ begin, end }) => {
+    const durationMin = getPeriodMinutes(begin, end)
+    totalOffMinutes += durationMin
+    const approxHours = formatHoursShort(durationMin)
+    return `<code>${begin} — ${end}</code> (~${approxHours})`
+  })
+
+  return [
+    `<b>${title}:</b>`,
+    ...periods,
+    `Загалом без світла: ${formatTotalDuration(totalOffMinutes)}`,
+  ].join("\n")
 }
 
 function generateMessage({ sections, updatedAt }) {
