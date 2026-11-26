@@ -101,6 +101,71 @@ function generateSchedule({ data }) {
   }
 }
 
+function parseDayToDate(dayValue) {
+  if (!dayValue && dayValue !== 0) return null
+
+  if (typeof dayValue === "number") {
+    const ms = dayValue < 1e12 ? dayValue * 1000 : dayValue
+    const date = new Date(ms)
+    return Number.isNaN(date.getTime()) ? null : date
+  }
+
+  const str = String(dayValue).trim()
+
+  if (/^\d+$/.test(str)) {
+    const num = Number(str)
+    const ms = num < 1e12 ? num * 1000 : num
+    const date = new Date(ms)
+    return Number.isNaN(date.getTime()) ? null : date
+  }
+
+  const dmyMatch = str.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/)
+  if (dmyMatch) {
+    const [, dd, mm, yyyy] = dmyMatch
+    const date = new Date(Date.UTC(Number(yyyy), Number(mm) - 1, Number(dd), 12))
+    return Number.isNaN(date.getTime()) ? null : date
+  }
+
+  const ymdMatch = str.match(/^(\d{4})[./-](\d{1,2})[./-](\d{1,2})$/)
+  if (ymdMatch) {
+    const [, yyyy, mm, dd] = ymdMatch
+    const date = new Date(Date.UTC(Number(yyyy), Number(mm) - 1, Number(dd), 12))
+    return Number.isNaN(date.getTime()) ? null : date
+  }
+
+  const parsed = new Date(str)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+function formatDayHeading({ title, dayValue }) {
+  const date = parseDayToDate(dayValue)
+  if (!date) return title
+
+  const timeZone = "Europe/Kyiv"
+  const parts = new Intl.DateTimeFormat("ru-RU", {
+    timeZone,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    weekday: "long",
+  }).formatToParts(date)
+
+  const getPart = (type) => parts.find((p) => p.type === type)?.value || ""
+  const dd = getPart("day")
+  const mm = getPart("month")
+  const yyyy = getPart("year")
+  const weekdayRaw = getPart("weekday")
+  const weekday = weekdayRaw
+    ? weekdayRaw.charAt(0).toUpperCase() + weekdayRaw.slice(1)
+    : ""
+
+  if (!dd || !mm || !yyyy) return title
+
+  return weekday
+    ? `${title}, ${dd}.${mm}.${yyyy} (${weekday})`
+    : `${title}, ${dd}.${mm}.${yyyy}`
+}
+
 function parseTimeToMinutes(timeStr) {
   const [hh, mm] = String(timeStr).split(":").map(Number)
   return hh * 60 + mm
@@ -120,32 +185,33 @@ function formatHoursShort(minutes) {
   const formatted = Number.isInteger(hours)
     ? String(hours)
     : String(Number(hours.toFixed(1)))
-  return `${formatted} год`
+  return `${formatted} ч`
 }
 
 function formatTotalDuration(totalMinutes) {
   const hours = Math.floor(totalMinutes / 60)
   const minutes = totalMinutes % 60
-  if (minutes === 0) return `${hours} год`
-  if (hours === 0) return `${minutes} хв`
-  return `${hours} год ${minutes} хв`
+  if (minutes === 0) return `${hours} ч`
+  if (hours === 0) return `${minutes} мин`
+  return `${hours} ч ${minutes} мин`
 }
 
-function generateScheduleText({ title, schedule }) {
+function generateScheduleText({ title, dayValue, schedule }) {
   if (!schedule) return null
 
+  const heading = formatDayHeading({ title, dayValue })
   const offPeriods = schedule.filter(({ power }) => !power)
   const isShutdownsExists = offPeriods.length > 0
 
   isShutdownsExists
-    ? console.log(`Power shutdowns detected: ${title}.`)
-    : console.log(`No power shutdowns: ${title}.`)
+    ? console.log(`Power shutdowns detected: ${heading}.`)
+    : console.log(`No power shutdowns: ${heading}.`)
 
   if (!isShutdownsExists) {
     const periods = schedule.map(
       ({ begin, end }) => `<code>${begin} — ${end}</code>`
     )
-    return [`<b>${title}:</b>`, ...periods].join("\n")
+    return [`<b>${heading}:</b>`, ...periods].join("\n")
   }
 
   let totalOffMinutes = 0
@@ -158,9 +224,9 @@ function generateScheduleText({ title, schedule }) {
   })
 
   return [
-    `<b>${title}:</b>`,
+    `<b>${heading}:</b>`,
     ...periods,
-    `Загалом без світла: ${formatTotalDuration(totalOffMinutes)}`,
+    `Всего без света: ${formatTotalDuration(totalOffMinutes)}`,
   ].join("\n")
 }
 
@@ -305,10 +371,12 @@ async function run() {
 
   const todayText = generateScheduleText({
     title: DayTitle.TODAY,
+    dayValue: today,
     schedule: todaySchedule,
   })
   const tomorrowText = generateScheduleText({
     title: DayTitle.TOMORROW,
+    dayValue: tomorrow,
     schedule: tomorrowSchedule,
   })
 
