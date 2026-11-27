@@ -364,6 +364,17 @@ async function run() {
   const todaySchedule = generateSchedule({ data: todayData })
   const tomorrowSchedule = generateSchedule({ data: tomorrowData })
 
+const todaySchedule = generateSchedule({ data: todayData })
+  const tomorrowSchedule = generateSchedule({ data: tomorrowData })
+
+  console.log("Debug data:", {
+    today,
+    tomorrow,
+    group: GROUP,
+    dataKeys: Object.keys(data.data || {}),
+    groupKeys: Object.keys(data.data?.[today] || {}),
+  })
+
   if (!todaySchedule && !tomorrowSchedule) {
     console.log("🔋 No schedule.")
     return
