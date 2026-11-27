@@ -362,7 +362,32 @@ async function run() {
 
   const todaySchedule = generateSchedule({ data: todayData })
   const tomorrowSchedule = generateSchedule({ data: tomorrowData })
+async function run() {
+  const data = await getShutdownsData()
 
+  const { today } = data
+  const tomorrow = getNextDay({ data, day: today })
+
+  const todayData = data.data?.[today]?.[GROUP]
+  const tomorrowData = data.data?.[tomorrow]?.[GROUP]
+
+  const todaySchedule = generateSchedule({ data: todayData })
+  const tomorrowSchedule = generateSchedule({ data: tomorrowData })
+
+  // СЮДА ВСТАВЛЯЕМ ОТЛАДОЧНЫЙ ЛОГ:
+  console.log("Debug GPV6.2:", {
+    today,
+    tomorrow,
+    group: GROUP,
+    todayData: data.data?.[today]?.[GROUP],
+    tomorrowData: data.data?.[tomorrow]?.[GROUP],
+    dataKeys: Object.keys(data || {}),
+  })
+
+  if (!todaySchedule && !tomorrowSchedule) {
+    console.log("🔋 No schedule.")
+    return
+  }
   if (!todaySchedule && !tomorrowSchedule) {
     console.log("🔋 No schedule.")
     return
