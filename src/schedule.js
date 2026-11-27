@@ -364,9 +364,6 @@ async function run() {
   const todaySchedule = generateSchedule({ data: todayData })
   const tomorrowSchedule = generateSchedule({ data: tomorrowData })
 
-const todaySchedule = generateSchedule({ data: todayData })
-  const tomorrowSchedule = generateSchedule({ data: tomorrowData })
-
   console.log("Debug data:", {
     today,
     tomorrow,
