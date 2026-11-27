@@ -270,7 +270,6 @@ async function sendNotification({ body, footer, attempt = 0 }) {
     chats: isMapState ? { ...lastState.chats } : {},
   }
 
-  // Если раньше сохранялся формат под один чат — перенесём его на первый ID
   if (!isMapState && lastState?.message_id && chatIds[0]) {
     nextState.chats[chatIds[0]] = {
       message_id: lastState.message_id,
@@ -363,14 +362,6 @@ async function run() {
 
   const todaySchedule = generateSchedule({ data: todayData })
   const tomorrowSchedule = generateSchedule({ data: tomorrowData })
-
-  console.log("Debug data:", {
-    today,
-    tomorrow,
-    group: GROUP,
-    dataKeys: Object.keys(data.data || {}),
-    groupKeys: Object.keys(data.data?.[today] || {}),
-  })
 
   if (!todaySchedule && !tomorrowSchedule) {
     console.log("🔋 No schedule.")
